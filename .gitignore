@@ -1,0 +1,13 @@
+node_modules/
+.vercel
+.env
+.env.local
+.DS_Store
+
+# Datos reales de clientes: nunca al repo. Se usa data/leads.sample.json
+# como fallback hasta conectar Google Sheets.
+data/leads.json
+
+# Archivo original de un solo bloque: tiene los mismos datos reales
+# embebidos inline, por eso tampoco se versiona.
+crm-nexus.html

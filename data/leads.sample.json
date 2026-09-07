@@ -1,0 +1,5 @@
+[
+  {"i":"S000","c":"Café Demo Central","n":"Ana Ejemplo","q":"20-00000000-1","d":"Av. Siempreviva 123, Ciudad Demo, (X0000), Buenos Aires, Argentina","y":"Ciudad Demo","p":"Bs. As.","t":[["5491100000001","+5491100000001",1]],"m":["ana.ejemplo@demo.com"],"l":"Clientes","g":"Check"},
+  {"i":"S001","c":"Resto Bar Muestra","n":"Juan Ficticio","q":"27-11111111-2","d":"Calle Falsa 456, Pueblo Muestra, (Y1111), Córdoba, Argentina","y":"Pueblo Muestra","p":"Córdoba","t":[["5493510000002","+5493510000002",1]],"m":["juan.ficticio@demo.com"],"l":"Prospectos","g":"NG +"},
+  {"i":"S002","c":"Panadería Ejemplo","n":"Lucía Prueba","q":"23-22222222-3","d":"Ruta 9 km 10, Villa Prueba, (Z2222), Santa Fe, Argentina","y":"Villa Prueba","p":"Santa Fe","t":[],"m":["lucia.prueba@demo.com"],"l":"Prospectos","g":"Check"}
+]

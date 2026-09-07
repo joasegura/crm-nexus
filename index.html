@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRM Nexus · Prospectos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="top">
+  <div class="top-in">
+    <div class="brand">
+      <img src="assets/nexus-logo.png" alt="Nexus">
+      <div class="sep"></div>
+      <h1>Prospectos <span class="sub" id="tot"></span></h1>
+      <div class="spacer"></div>
+      <button class="ghost" id="btn-msg">Mensajes</button>
+      <button class="ghost" id="btn-exp">Exportar</button>
+      <button class="ghost" id="btn-imp">Importar</button>
+      <input type="file" id="file" accept=".json" hidden>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b id="s-nuevo">0</b><span>Sin contactar</span></div>
+      <div class="stat"><b id="s-cont">0</b><span>Contactados</span></div>
+      <div class="stat"><b id="s-resp">0</b><span>Respondieron</span></div>
+      <div class="stat"><b id="s-reu">0</b><span>Reuniones</span></div>
+      <div class="stat"><b id="s-cli">0</b><span>Clientes</span></div>
+      <div class="stat"><b id="s-desc">0</b><span>Descartados</span></div>
+    </div>
+    <div class="bar" id="bar"></div>
+
+    <div class="filters">
+      <div class="search"><input id="q" placeholder="Buscar por comercio, contacto, ciudad o teléfono"></div>
+      <select id="f-prov"></select>
+      <select id="f-lista"></select>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+</div>
+
+<main>
+  <div id="list"></div>
+  <div id="empty" class="empty" hidden>No hay prospectos con esos filtros. Probá limpiar la búsqueda.</div>
+  <button class="more" id="more" hidden>Mostrar más</button>
+</main>
+
+<div class="modal" id="modal">
+  <div class="sheet">
+    <h2>Mensajes de WhatsApp</h2>
+    <p class="help">Se abre WhatsApp con el texto ya escrito. Variables disponibles: {nombre}, {comercio}, {ciudad}.</p>
+    <div class="tabs" id="tpl-tabs"></div>
+    <textarea id="tpl-text"></textarea>
+    <div class="prev" id="tpl-prev"></div>
+    <div class="foot">
+      <button class="mini" id="tpl-reset">Restaurar original</button>
+      <button class="primary" id="tpl-save">Guardar mensaje</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/storage.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
