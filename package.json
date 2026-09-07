@@ -5,5 +5,8 @@
   "description": "CRM Nexus - gestión de prospectos y clientes para ATOM Soluciones IT",
   "scripts": {
     "dev": "vercel dev"
+  },
+  "dependencies": {
+    "googleapis": "^178.0.0"
   }
 }

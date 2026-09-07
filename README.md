@@ -30,19 +30,70 @@ Si ese archivo no existe (por ejemplo, en un deploy fresco desde GitHub),
 `api/leads.js` sirve `data/leads.sample.json` como fallback para que el sitio
 no se rompa.
 
-## Conectar Google Sheets (próximo paso)
+## Google Sheets
 
-El único lugar que hay que tocar es `api/leads.js`: hoy lee un archivo local,
-más adelante debería llamar a la API de Google Sheets (paquete `googleapis`)
-usando credenciales de una service account guardadas como variables de
-entorno en Vercel (`Project Settings → Environment Variables`), nunca en el
-repo. El front-end (`js/app.js`) ya pide los datos con
-`fetch('/api/leads')`, así que no necesita cambios.
+`api/leads.js` ya sabe leer la lista de prospectos desde una Google Sheet. Si
+no configurás nada, sigue funcionando como antes (lee `data/leads.json` o
+`data/leads.sample.json` local). El front-end no cambia: siempre pide
+`fetch('/api/leads')`.
 
-Si más adelante también querés que las notas/estados de cada prospecto vivan
-en Sheets (hoy quedan en `localStorage` del navegador vía `js/storage.js`),
-se puede sumar un endpoint similar (`api/state.js`) y actualizar `js/storage.js`
-para llamarlo en vez de `localStorage`.
+### 1. Armar la planilla
+
+Se generó `prospectos-para-google-sheets.csv` (en el Escritorio, al lado de
+esta carpeta) con tus 530 registros reales, en las columnas que espera el
+código:
+
+```
+ID | Comercio | Contacto | CUIT | Direccion | Ciudad | Provincia | Lista | Grupo | Telefonos | Emails
+```
+
+- **Telefonos**: varios números separados por `/`, cada uno con formato
+  `+549...`. Un `?` al final de un número (ej. `+5491100000000 ?`) lo marca
+  como "revisar" (dudoso).
+- **Emails**: varios separados por `/`.
+- **ID**: identificador estable (ej. `C000`). Si agregás una fila nueva a
+  mano, dejalo vacío: el código genera uno automáticamente. No reordenes
+  filas con ID ya asignado, porque las notas guardadas en el navegador están
+  atadas a ese ID.
+
+En Google Sheets: `Archivo → Importar → Subir` ese CSV, como hoja nueva o
+reemplazando el contenido de una hoja llamada "Hoja 1" (el nombre de la hoja
+tiene que coincidir con `GOOGLE_SHEET_RANGE`, ver abajo).
+
+### 2. Crear la service account
+
+1. En [Google Cloud Console](https://console.cloud.google.com/), creá un
+   proyecto (o usá uno existente) y habilitá la **Google Sheets API**.
+2. `IAM y administración → Cuentas de servicio → Crear cuenta de servicio`.
+   No necesita ningún rol de proyecto.
+3. Generá una clave: `Claves → Agregar clave → JSON` y descargala. Ahí
+   adentro está `client_email` y `private_key`.
+4. Abrí la Google Sheet, tocá "Compartir" y agregá el `client_email` de la
+   service account con permiso de **Lector**.
+
+### 3. Variables de entorno en Vercel
+
+En `Project Settings → Environment Variables` del proyecto en Vercel:
+
+| Variable | Valor |
+|---|---|
+| `GOOGLE_SHEET_ID` | El ID de la planilla (la parte de la URL entre `/d/` y `/edit`) |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | El `client_email` del JSON de la service account |
+| `GOOGLE_PRIVATE_KEY` | El `private_key` del JSON, tal cual (con los `\n`) |
+| `GOOGLE_SHEET_RANGE` | Opcional. Por defecto `Hoja 1!A2:K` |
+
+Volvé a desplegar (o esperá el próximo push) para que tomen efecto. Si algo
+falla al leer la Sheet, `api/leads.js` cae de vuelta a los datos locales y
+loguea el error en Vercel (`Deployments → Functions → Logs`), en vez de
+romper el sitio.
+
+### Notas y estado de cada prospecto
+
+Por ahora siguen guardándose en `localStorage` del navegador de cada
+persona (vía `js/storage.js`), no en Sheets. Si más adelante varias personas
+necesitan ver el mismo progreso, se puede sumar un endpoint de escritura
+(`api/state.js`) y otra hoja para eso — es un paso aparte porque implica
+manejar escrituras concurrentes.
 
 ## Desarrollo local
 
