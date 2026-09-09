@@ -182,6 +182,11 @@ function fila(l){
     botones = '<span class="tag rev">Sin teléfono</span>';
   }
   const mail = l.m.length ? '<button class="mini" data-mail="'+l.i+'">Mail</button>' : '';
+  // El paso a "Contactado" es siempre manual: abrir WhatsApp o el mail no
+  // marca nada, lo marca el vendedor con este boton cuando ya escribio.
+  const marcar = r.e === 'nuevo'
+    ? '<button class="cont" data-cont="'+l.i+'">Contactado</button>'
+    : '<span class="cont ya">Contactado ✓</span>';
 
   return `
   <div class="row${r.e==='desc'?' done':''}">
@@ -197,7 +202,7 @@ function fila(l){
       </div>
     </div>
     <div class="acts">
-      ${botones}${mail}
+      ${botones}${mail}${marcar}
       <button class="mini${abierto?' on':''}" data-open="${l.i}">${abierto?'Cerrar':'Notas'}</button>
     </div>
     ${abierto ? panel(l, r) : ''}
@@ -262,10 +267,9 @@ document.addEventListener('click', e=>{
     const l = LEADS.find(x=>x.i===b.dataset.wa);
     const r = rec(l.i);
     const txt = armarMensaje(l, r.tpl || tplActiva);
+    // Abrir el mensaje no registra nada: el estado y la fecha de escrito los
+    // marca el vendedor con el boton "Contactado".
     window.open('https://wa.me/' + b.dataset.tel + '?text=' + encodeURIComponent(txt), '_blank');
-    if(r.e === 'nuevo'){ r.e = 'cont'; }
-    r.t = hoy();
-    save(l.i); render();
     return;
   }
   if(b.dataset.mail){
@@ -273,8 +277,13 @@ document.addEventListener('click', e=>{
     const r = rec(l.i);
     const txt = armarMensaje(l, r.tpl || tplActiva);
     location.href = 'mailto:' + l.m.join(',') + '?subject=' + encodeURIComponent('Nexus · sistema de gestión para ' + (l.c||'tu comercio')) + '&body=' + encodeURIComponent(txt);
-    if(r.e === 'nuevo'){ r.e = 'cont'; r.t = hoy(); }
-    save(l.i); render();
+    return;
+  }
+  if(b.dataset.cont){
+    const r = rec(b.dataset.cont);
+    r.e = 'cont';
+    if(!r.t) r.t = hoy();
+    save(b.dataset.cont); render(); toast('Marcado como contactado');
     return;
   }
   if(b.dataset.open){

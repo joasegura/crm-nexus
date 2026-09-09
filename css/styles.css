@@ -64,6 +64,9 @@ main{max-width:1180px;margin:0 auto;padding:18px 20px 90px}
 .mini{border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;color:var(--mute);white-space:nowrap}
 .mini:hover{color:var(--text);border-color:#b6c3d3;background:#fff}
 .mini.on{color:var(--blue);border-color:#a9cbe6;background:#eef5fb}
+.cont{border:1px solid #a9cbe6;border-radius:9px;padding:9px 11px;font-size:13px;font-weight:600;color:var(--blue);background:#eef5fb;white-space:nowrap}
+.cont:hover{background:#e0eef9;border-color:#8dbbdf}
+.cont.ya{border-color:var(--line);background:none;color:var(--mute);font-weight:500;cursor:default}
 
 /* panel expandido */
 .panel{grid-column:1/-1;background:var(--surface);border:1px solid var(--line);box-shadow:0 1px 2px rgba(18,32,47,.05);border-radius:12px;padding:14px;margin-top:4px;display:grid;gap:12px}
