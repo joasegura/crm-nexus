@@ -11,3 +11,10 @@ data/leads.json
 # Archivo original de un solo bloque: tiene los mismos datos reales
 # embebidos inline, por eso tampoco se versiona.
 crm-nexus.html
+
+# Claves JSON de service account de Google. Nunca al repo: el archivo se
+# guarda fuera de esta carpeta, esto es solo una red por si se cuela.
+*-*.json
+!package.json
+!package-lock.json
+!data/leads.sample.json

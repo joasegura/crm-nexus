@@ -3,7 +3,10 @@ const path = require('path');
 const { google } = require('googleapis');
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const SHEET_RANGE = process.env.GOOGLE_SHEET_RANGE || 'Hoja 1!A2:K';
+// Ojo: en notación A1, un nombre de hoja con espacios va entre comillas
+// simples ('Hoja 1'!A2:K). Sin comillas la API responde "Unable to parse
+// range" y caíamos al fallback local como si todo estuviera bien.
+const SHEET_RANGE = process.env.GOOGLE_SHEET_RANGE || "'Hoja 1'!A2:K";
 
 // La columna "Telefonos" guarda cada número formateado (+549...), separados
 // por " / "; un " ?" al final de un número marca "revisar" (dudoso).
@@ -22,6 +25,17 @@ function parseEmails(cell) {
   return cell.split('/').map(s => s.trim()).filter(Boolean);
 }
 
+// Si el rango viene de la env var con un nombre de hoja con espacios y sin
+// comillas ("Hoja 1!A2:K"), lo arreglamos en vez de fallar.
+function normalizeRange(range) {
+  const cut = range.lastIndexOf('!');
+  if (cut === -1) return range;
+  const sheet = range.slice(0, cut);
+  const cells = range.slice(cut + 1);
+  if (sheet.startsWith("'") || !/\s/.test(sheet)) return range;
+  return "'" + sheet.replace(/'/g, "''") + "'!" + cells;
+}
+
 async function fetchFromSheet() {
   const auth = new google.auth.JWT(
     process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -32,7 +46,7 @@ async function fetchFromSheet() {
   const sheets = google.sheets({ version: 'v4', auth });
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: SHEET_RANGE,
+    range: normalizeRange(SHEET_RANGE),
   });
   const rows = data.values || [];
   // Columnas: ID, Comercio, Contacto, CUIT, Direccion, Ciudad, Provincia, Lista, Grupo, Telefonos, Emails
@@ -58,15 +72,25 @@ function fallback() {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+/* La cabecera X-Leads-Source dice de dónde salieron los datos:
+     sheet         -> se leyó la Google Sheet
+     local         -> no hay GOOGLE_SHEET_ID configurado
+     local-error   -> se intentó leer la Sheet y falló (ver X-Leads-Error)
+   Así un fallback silencioso se nota, en vez de parecer que la sync anda. */
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   if (!SHEET_ID) {
+    res.setHeader('X-Leads-Source', 'local');
     return res.status(200).json(fallback());
   }
   try {
-    res.status(200).json(await fetchFromSheet());
+    const leads = await fetchFromSheet();
+    res.setHeader('X-Leads-Source', 'sheet');
+    res.status(200).json(leads);
   } catch (err) {
     console.error('Error leyendo Google Sheets, usando fallback local:', err.message);
+    res.setHeader('X-Leads-Source', 'local-error');
+    res.setHeader('X-Leads-Error', String(err.message).replace(/[^\x20-\x7E]/g, ' ').slice(0, 200));
     res.status(200).json(fallback());
   }
 };

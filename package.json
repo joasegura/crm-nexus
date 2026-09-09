@@ -4,7 +4,10 @@
   "private": true,
   "description": "CRM Nexus - gestión de prospectos y clientes para ATOM Soluciones IT",
   "scripts": {
-    "dev": "vercel dev"
+    "dev": "vercel dev",
+    "extract-leads": "node scripts/extract-leads.js",
+    "verify-leads": "node scripts/verify-roundtrip.js",
+    "check-sheets": "node scripts/check-sheets.js"
   },
   "dependencies": {
     "googleapis": "^178.0.0"
