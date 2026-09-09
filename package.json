@@ -7,7 +7,8 @@
     "dev": "vercel dev",
     "extract-leads": "node scripts/extract-leads.js",
     "verify-leads": "node scripts/verify-roundtrip.js",
-    "check-sheets": "node scripts/check-sheets.js"
+    "check-sheets": "node scripts/check-sheets.js",
+    "test": "node scripts/test-state.js"
   },
   "dependencies": {
     "googleapis": "^178.0.0"

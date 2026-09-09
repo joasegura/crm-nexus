@@ -1,8 +1,10 @@
+/* Lista de prospectos. Solo lectura: la base de clientes se edita en la
+   planilla, nunca desde el sitio. El estado de gestión (contactado, notas,
+   fechas) va por /api/state, que es lo único que el equipo escribe. */
 const fs = require('fs');
 const path = require('path');
-const { google } = require('googleapis');
+const L = require('./_lib.js');
 
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 // Ojo: en notación A1, un nombre de hoja con espacios va entre comillas
 // simples ('Hoja 1'!A2:K). Sin comillas la API responde "Unable to parse
 // range" y caíamos al fallback local como si todo estuviera bien.
@@ -25,31 +27,11 @@ function parseEmails(cell) {
   return cell.split('/').map(s => s.trim()).filter(Boolean);
 }
 
-// Si el rango viene de la env var con un nombre de hoja con espacios y sin
-// comillas ("Hoja 1!A2:K"), lo arreglamos en vez de fallar.
-function normalizeRange(range) {
-  const cut = range.lastIndexOf('!');
-  if (cut === -1) return range;
-  const sheet = range.slice(0, cut);
-  const cells = range.slice(cut + 1);
-  if (sheet.startsWith("'") || !/\s/.test(sheet)) return range;
-  return "'" + sheet.replace(/'/g, "''") + "'!" + cells;
-}
-
 async function fetchFromSheet() {
-  /* Ojo: la forma posicional new JWT(email, null, key, scopes) dejó de
-     funcionar en google-auth-library 10.x. No tira error: devuelve un cliente
-     sin email ni clave, la petición sale sin autenticar y Google responde
-     "Method doesn't allow unregistered callers". Hay que usar el objeto. */
-  const auth = new google.auth.JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = L.getSheets();
   const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: normalizeRange(SHEET_RANGE),
+    spreadsheetId: L.SHEET_ID,
+    range: L.normalizeRange(SHEET_RANGE),
   });
   const rows = data.values || [];
   // Columnas: ID, Comercio, Contacto, CUIT, Direccion, Ciudad, Provincia, Lista, Grupo, Telefonos, Emails
@@ -80,7 +62,7 @@ function fallback() {
 function diagnostico() {
   const partes = [];
 
-  partes.push('id=' + (SHEET_ID ? 'ok' : 'FALTA'));
+  partes.push('id=' + (L.SHEET_ID ? 'ok' : 'FALTA'));
 
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '';
   partes.push('email=' + (!email ? 'FALTA'
@@ -113,7 +95,13 @@ function diagnostico() {
    Así un fallback silencioso se nota, en vez de parecer que la sync anda. */
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  if (!SHEET_ID) {
+
+  if (!L.autorizado(req, res)) return;
+
+  // Le avisamos al front si el sitio está sin contraseña, para que lo muestre.
+  res.setHeader('X-Leads-Protegido', L.passwordConfigurada() ? 'si' : 'no');
+
+  if (!L.SHEET_ID) {
     res.setHeader('X-Leads-Source', 'local');
     return res.status(200).json(fallback());
   }

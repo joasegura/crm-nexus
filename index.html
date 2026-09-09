@@ -11,6 +11,17 @@
 </head>
 <body>
 
+<div class="gate" id="gate" hidden>
+  <div class="gate-box">
+    <img src="assets/nexus-logo.png" alt="Nexus">
+    <h2>CRM Nexus</h2>
+    <p>Ingresá la contraseña del equipo de ventas.</p>
+    <input type="password" id="gate-pass" placeholder="Contraseña" autocomplete="current-password">
+    <div class="gate-msg" id="gate-msg"></div>
+    <button class="primary" id="gate-btn">Entrar</button>
+  </div>
+</div>
+
 <div class="top">
   <div class="top-in">
     <div class="brand">
@@ -18,6 +29,8 @@
       <div class="sep"></div>
       <h1>Prospectos <span class="sub" id="tot"></span></h1>
       <div class="spacer"></div>
+      <span class="sync" id="sync"></span>
+      <button class="ghost" id="quien-btn" title="Cambiar mi nombre">👤 <span id="quien">—</span></button>
       <button class="ghost" id="btn-msg">Mensajes</button>
       <button class="ghost" id="btn-exp">Exportar</button>
       <button class="ghost" id="btn-imp">Importar</button>

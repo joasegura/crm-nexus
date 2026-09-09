@@ -1,7 +1,6 @@
 let LEADS = [];
 async function loadLeads(){
-  const res = await fetch('/api/leads');
-  LEADS = await res.json();
+  LEADS = await window.sync.leads();
 }
 
 /* ---------- estados ---------- */
@@ -50,29 +49,59 @@ Tengo lugar esta semana. ¿Te queda mejor mañana a la mañana o a la tarde?`
 let TPL = JSON.parse(JSON.stringify(TPL_DEF));
 let tplActiva = 'presenta';
 
-/* ---------- estado guardado ---------- */
-let DB = {};          // { id: {e, n, f, t, w} }
-const KEY = 'crm-nexus-v1';
-let saveTimer = null;
+/* ---------- estado compartido ----------
+   DB es { id: {e, n, f, t, tpl, by, at} } y vive en la pestaña "Gestion" de
+   la planilla, no en el navegador: lo que guarda uno lo ve todo el equipo.
+   Se guarda un lead por vez, así dos personas trabajando sobre prospectos
+   distintos nunca se pisan. */
+let DB = {};
 
 async function load(){
-  try{
-    const r = await window.storage.get(KEY);
-    if(r && r.value){
-      const d = JSON.parse(r.value);
-      DB = d.db || {};
-      if(d.tpl) TPL = Object.assign(JSON.parse(JSON.stringify(TPL_DEF)), d.tpl);
+  const d = await window.sync.cargarEstado();
+  DB = d.db || {};
+  if(d.tpl) TPL = Object.assign(JSON.parse(JSON.stringify(TPL_DEF)), d.tpl);
+}
+
+// save(id) guarda SOLO ese lead. Sin id no hay nada que mandar.
+function save(id){
+  if(!id){ return; }
+  const r = rec(id);
+  r.by = window.sync.quien;
+  r.at = new Date().toISOString();
+  window.sync.guardarLead(id, {e:r.e, n:r.n, f:r.f, t:r.t, tpl:r.tpl||''});
+}
+function rec(id){ if(!DB[id]) DB[id] = {e:'nuevo', n:'', f:'', t:'', tpl:'', by:'', at:''}; return DB[id]; }
+
+/* Refresca desde la planilla para ver lo que cargaron los demás. No pisa el
+   lead que esté abierto en este momento: si lo estás editando, tu versión
+   manda hasta que lo cierres. */
+async function refrescar(){
+  if(window.sync.hayPendientes()) return;
+  let d;
+  try{ d = await window.sync.cargarEstado(); }
+  catch(e){ return; }
+  const nuevo = d.db || {};
+  let cambios = 0;
+  for(const id of Object.keys(nuevo)){
+    if(id === abiertoId) continue;
+    const a = DB[id], b = nuevo[id];
+    if(!a || a.e!==b.e || a.n!==b.n || a.f!==b.f || a.t!==b.t || a.at!==b.at){
+      DB[id] = b; cambios++;
     }
-  }catch(e){ /* primera vez, sin datos guardados */ }
+  }
+  if(d.tpl) TPL = Object.assign(JSON.parse(JSON.stringify(TPL_DEF)), d.tpl);
+  if(cambios){ render(); toast(cambios===1 ? 'Se actualizó 1 prospecto' : 'Se actualizaron '+cambios+' prospectos'); }
 }
-function save(){
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(async ()=>{
-    try{ await window.storage.set(KEY, JSON.stringify({db:DB, tpl:TPL})); }
-    catch(e){ toast('No se pudo guardar. Exportá un respaldo por las dudas.'); }
-  }, 400);
+
+function haceCuanto(iso){
+  if(!iso) return '';
+  const s = Math.floor((Date.now() - new Date(iso).getTime())/1000);
+  if(isNaN(s)) return '';
+  if(s < 60) return 'recién';
+  if(s < 3600) return 'hace ' + Math.floor(s/60) + ' min';
+  if(s < 86400) return 'hace ' + Math.floor(s/3600) + ' h';
+  return 'hace ' + Math.floor(s/86400) + ' d';
 }
-function rec(id){ if(!DB[id]) DB[id] = {e:'nuevo', n:'', f:'', t:'', w:0}; return DB[id]; }
 
 /* ---------- helpers ---------- */
 function toast(m){
@@ -163,6 +192,7 @@ function fila(l){
         <span class="tag" style="color:${e.c};border-color:${e.c}55;background:${e.c}12">${e.t}</span>
         <span class="tag">${esc(l.l)}</span>
         ${cont}${pend}
+        ${r.by ? '<span class="tag firma">'+esc(r.by)+' · '+esc(haceCuanto(r.at))+'</span>' : ''}
         ${dudoso ? '<span class="tag rev">Revisar número</span>' : ''}
       </div>
     </div>
@@ -195,6 +225,7 @@ function panel(l, r){
         <div class="chips" style="padding:0">${tpls}</div>
       </div>
     </div>
+    ${r.by ? '<div class="meta firma">Última edición: '+esc(r.by)+' '+esc(haceCuanto(r.at))+'</div>' : ''}
     ${l.d ? '<div class="meta">'+esc(l.d)+(l.q?' · CUIT '+esc(l.q):'')+'</div>' : ''}
     ${l.m.length ? '<div class="meta">'+l.m.map(esc).join(' · ')+'</div>' : ''}
     <div class="prev">${esc(armarMensaje(l, r.tpl || tplActiva))}</div>
@@ -233,8 +264,8 @@ document.addEventListener('click', e=>{
     const txt = armarMensaje(l, r.tpl || tplActiva);
     window.open('https://wa.me/' + b.dataset.tel + '?text=' + encodeURIComponent(txt), '_blank');
     if(r.e === 'nuevo'){ r.e = 'cont'; }
-    r.w = 1; r.t = hoy();
-    save(); render();
+    r.t = hoy();
+    save(l.i); render();
     return;
   }
   if(b.dataset.mail){
@@ -243,7 +274,7 @@ document.addEventListener('click', e=>{
     const txt = armarMensaje(l, r.tpl || tplActiva);
     location.href = 'mailto:' + l.m.join(',') + '?subject=' + encodeURIComponent('Nexus · sistema de gestión para ' + (l.c||'tu comercio')) + '&body=' + encodeURIComponent(txt);
     if(r.e === 'nuevo'){ r.e = 'cont'; r.t = hoy(); }
-    save(); render();
+    save(l.i); render();
     return;
   }
   if(b.dataset.open){
@@ -254,11 +285,11 @@ document.addEventListener('click', e=>{
     const [id,k] = b.dataset.st.split('|');
     const r = rec(id); r.e = k;
     if(k!=='nuevo' && !r.t) r.t = hoy();
-    save(); render(); return;
+    save(id); render(); return;
   }
   if(b.dataset.tpl2){
     const [id,k] = b.dataset.tpl2.split('|');
-    rec(id).tpl = k; save(); render(); return;
+    rec(id).tpl = k; save(id); render(); return;
   }
   if(b.dataset.chip !== undefined){
     const v = b.dataset.chip;
@@ -272,12 +303,12 @@ document.addEventListener('click', e=>{
 
 document.addEventListener('input', e=>{
   const t = e.target;
-  if(t.dataset.nota){ rec(t.dataset.nota).n = t.value; save(); }
-  if(t.dataset.fecha){ rec(t.dataset.fecha).f = t.value; save(); }
+  if(t.dataset.nota){ rec(t.dataset.nota).n = t.value; save(t.dataset.nota); }
+  if(t.dataset.fecha){ rec(t.dataset.fecha).f = t.value; save(t.dataset.fecha); }
 });
 
 document.addEventListener('change', e=>{
-  if(e.target.dataset.fecha){ rec(e.target.dataset.fecha).f = e.target.value; save(); render(); }
+  if(e.target.dataset.fecha){ rec(e.target.dataset.fecha).f = e.target.value; save(e.target.dataset.fecha); render(); }
 });
 
 document.getElementById('q').addEventListener('input', e=>{
@@ -329,7 +360,7 @@ document.getElementById('tpl-tabs').addEventListener('click', e=>{
 });
 document.getElementById('tpl-save').onclick = ()=>{
   TPL[tplActiva].txt = document.getElementById('tpl-text').value;
-  save(); modal.classList.remove('open'); render(); toast('Mensaje guardado');
+  window.sync.guardarTpl(TPL); modal.classList.remove('open'); render(); toast('Mensaje guardado para todo el equipo');
 };
 document.getElementById('tpl-reset').onclick = ()=>{
   TPL[tplActiva].txt = TPL_DEF[tplActiva].txt; pintaTpl(); toast('Mensaje restaurado');
@@ -356,20 +387,111 @@ document.getElementById('btn-imp').onclick = ()=>document.getElementById('file')
 document.getElementById('file').onchange = e=>{
   const f = e.target.files[0]; if(!f) return;
   const rd = new FileReader();
-  rd.onload = ()=>{
+  rd.onload = async ()=>{
+    let d;
+    try{ d = JSON.parse(rd.result); }
+    catch(err){ return toast('Ese archivo no es un respaldo válido'); }
+    const cuantos = Object.keys(d.db||{}).length;
+    // Importar pisa el trabajo de todo el equipo, no solo el propio.
+    if(!confirm('Vas a importar '+cuantos+' prospectos sobre el estado compartido.\n\nEsto reemplaza lo que haya cargado el equipo en esos prospectos. ¿Seguir?')) return;
     try{
-      const d = JSON.parse(rd.result);
       DB = Object.assign(DB, d.db||{});
-      if(d.tpl) TPL = Object.assign(TPL, d.tpl);
-      save(); render(); toast('Respaldo importado');
-    }catch(err){ toast('Ese archivo no es un respaldo válido'); }
+      if(d.tpl){ TPL = Object.assign(TPL, d.tpl); await window.sync.guardarTpl(TPL); }
+      const r = await window.sync.guardarBulk(d.db||{});
+      render(); toast('Respaldo importado: '+r.escritos+' prospectos');
+    }catch(err){ toast('No se pudo importar: '+err.message); }
   };
   rd.readAsText(f);
+  e.target.value = '';
 };
 
+/* ---------- identidad y sesión ---------- */
+function pintarQuien(){
+  const el = document.getElementById('quien');
+  if(el) el.textContent = window.sync.quien || 'Sin nombre';
+}
+function pedirNombre(){
+  const actual = window.sync.quien;
+  const n = prompt('¿Con qué nombre querés que se registren tus cambios?\n\nLo ve el resto del equipo en cada prospecto que tocás.', actual || '');
+  if(n === null) return;
+  const limpio = n.trim().slice(0,60);
+  if(!limpio) return toast('Necesitás un nombre para que el equipo sepa quién editó');
+  window.sync.quien = limpio; pintarQuien(); render();
+  toast('Listo, tus cambios se guardan como ' + limpio);
+}
+
+function pintarEstadoSync(e){
+  const el = document.getElementById('sync');
+  if(!el) return;
+  const txt = {pendiente:'Sin guardar…', guardando:'Guardando…', guardado:'Guardado', error:'Error al guardar'};
+  el.textContent = txt[e] || '';
+  el.className = 'sync ' + e;
+  if(e === 'guardado'){ clearTimeout(el._h); el._h = setTimeout(()=>{ el.textContent=''; el.className='sync'; }, 1800); }
+}
+
+function mostrarError(msg){
+  const g = document.getElementById('gate');
+  g.hidden = false;
+  g.querySelector('.gate-box').innerHTML =
+    '<h2>No se pudo cargar</h2>' +
+    '<p>' + esc(msg || 'Error desconocido.') + '</p>' +
+    '<button class="primary" onclick="location.reload()">Reintentar</button>';
+}
+
+function mostrarLogin(mensaje){
+  const g = document.getElementById('gate');
+  g.hidden = false;
+  document.getElementById('gate-msg').textContent = mensaje || '';
+  const i = document.getElementById('gate-pass');
+  i.value = ''; i.focus();
+}
+
+async function intentarEntrar(){
+  const pass = document.getElementById('gate-pass').value;
+  if(!pass) return;
+  const btn = document.getElementById('gate-btn');
+  btn.disabled = true; btn.textContent = 'Verificando…';
+  const ok = await window.sync.probarPass(pass);
+  btn.disabled = false; btn.textContent = 'Entrar';
+  if(!ok) return mostrarLogin('Contraseña incorrecta.');
+  document.getElementById('gate').hidden = true;
+  arrancar();
+}
+document.getElementById('gate-btn').onclick = intentarEntrar;
+document.getElementById('gate-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') intentarEntrar(); });
+document.getElementById('quien-btn').onclick = pedirNombre;
+
 /* ---------- arranque ---------- */
-(async ()=>{
-  await loadLeads();
-  await load();
+let arrancado = false;
+async function arrancar(){
+  if(arrancado) return;
+  arrancado = true;
+  window.sync.onEstado = pintarEstadoSync;
+  window.sync.onError = m => toast(m);
+  try{
+    await loadLeads();
+    await load();
+  }catch(e){
+    arrancado = false;
+    if(e && e.auth) return mostrarLogin('Se cerró la sesión, entrá de nuevo.');
+    // Un fallo acá deja la app sin datos: conviene mostrarlo en grande y no
+    // en un toast que se va solo. El caso típico es que la service account
+    // siga como Lector y no pueda escribir la pestaña de gestión.
+    return mostrarError(e.message);
+  }
+  if(!window.sync.quien) pedirNombre();
+  pintarQuien();
   chips(); selects(); render();
+  // Refresco periódico para ver lo que carga el resto del equipo.
+  setInterval(refrescar, 25000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refrescar(); });
+}
+
+(async ()=>{
+  // Si el sitio no tiene contraseña configurada, no mostramos login: entrar
+  // igual evita dejar al equipo frente a una pantalla que no puede pasar.
+  if(!await window.sync.necesitaPass()) return arrancar();
+  // Con contraseña guardada que sigue sirviendo, entramos derecho.
+  if(window.sync.pass && await window.sync.probarPass(window.sync.pass)) return arrancar();
+  mostrarLogin(window.sync.pass ? 'La contraseña guardada ya no sirve.' : '');
 })();

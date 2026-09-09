@@ -11,11 +11,13 @@ porque tiene la misma información sensible que `data/leads.json`.
 ```
 index.html         Markup de la app
 css/styles.css      Estilos
-js/storage.js       Persistencia local (notas, estados, plantillas)
+js/storage.js       Sincronizacion con /api/state (notas, estados, plantillas)
 js/app.js           Lógica de la app
 data/leads.json      Datos reales de clientes (NO se versiona, ver abajo)
 data/leads.sample.json  Datos de muestra (sí se versiona, para demo/fallback)
-api/leads.js        Función serverless que sirve la lista de prospectos
+api/leads.js        Serverless: lista de prospectos (solo lectura)
+api/state.js        Serverless: estado de gestion compartido (lectura y escritura)
+api/_lib.js         Auth compartida + cliente de Sheets
 assets/nexus-logo.png  Logo
 scripts/            Utilidades de datos (ver abajo)
 ```
@@ -26,6 +28,7 @@ scripts/            Utilidades de datos (ver abajo)
 npm run extract-leads   # crm-nexus.html -> data/leads.json + CSV para Sheets
 npm run verify-leads    # confirma que el CSV reconstruye los mismos datos
 npm run check-sheets    # prueba la conexión con Google Sheets y diagnostica
+npm test                # tests de /api/state contra una planilla falsa
 ```
 
 ## Datos de clientes
@@ -97,7 +100,9 @@ separador y viene con BOM, así que Sheets lo detecta solo; si pregunta, elegí
    Ese JSON se descarga **una sola vez** (si lo perdés, generá una clave
    nueva y borrá la vieja) y es un secreto: guardalo fuera de esta carpeta.
 4. Abrí la Google Sheet, tocá "Compartir" y agregá el `client_email` de la
-   service account con permiso de **Lector**.
+   service account con permiso de **Editor**. (Con **Lector** alcanza si solo
+   querés leer los prospectos, pero el estado compartido del equipo necesita
+   escribir; ver "Trabajo en equipo" más abajo.)
 
 ### 3. Variables de entorno en Vercel
 
@@ -157,13 +162,67 @@ silencioso con una sync que funciona:
 curl.exe -sI https://TU-PROYECTO.vercel.app/api/leads | findstr /i X-Leads
 ```
 
-### Notas y estado de cada prospecto
+## Trabajo en equipo (estado compartido)
 
-Por ahora siguen guardándose en `localStorage` del navegador de cada
-persona (vía `js/storage.js`), no en Sheets. Si más adelante varias personas
-necesitan ver el mismo progreso, se puede sumar un endpoint de escritura
-(`api/state.js`) y otra hoja para eso — es un paso aparte porque implica
-manejar escrituras concurrentes.
+El equipo de ventas trabaja desde el sitio y todo queda en la planilla: lo que
+carga uno lo ve el resto. Un vendedor puede empezar a contactar un prospecto y
+otro seguir desde donde quedó.
+
+**Qué se comparte** (pestaña `Gestion`, se crea sola):
+
+```
+ID | Estado | Notas | Escrito | Volver | Plantilla | Quien | Cuando
+```
+
+Las plantillas de mensajes van en la pestaña `Config`, también compartidas.
+Los datos del prospecto (nombre, teléfono, CUIT, email) siguen siendo **solo
+lectura** desde el sitio: se editan en la planilla, así nadie rompe la base
+sin querer.
+
+**Quién hizo qué**: la primera vez, cada persona escribe su nombre. Queda
+guardado en su navegador y se registra en cada prospecto que toca, visible
+para todos como "Ana · hace 10 min".
+
+### Requisitos adicionales
+
+Además de lo de arriba, el estado compartido necesita dos cosas:
+
+1. **La service account tiene que ser Editor**, no Lector. En la planilla:
+   `Compartir` → el `client_email` → cambiar de Lector a **Editor**. Sin esto
+   el sitio muestra "La service account necesita permiso de Editor".
+2. **Una contraseña de equipo**, en Vercel:
+
+   | Variable | Valor |
+   |---|---|
+   | `CRM_PASSWORD` | La clave que compartís con el equipo de ventas |
+
+   Sin `CRM_PASSWORD` el sitio queda **abierto**: cualquiera con el link ve
+   los datos de tus clientes y puede editarlos. La app no muestra login en ese
+   caso, para no dejar al equipo frente a una pantalla que no puede pasar.
+
+### Cómo se resuelven los choques
+
+Se escribe **una fila por vez**: dos personas sobre prospectos distintos nunca
+se pisan. Sobre el *mismo* prospecto gana el último que guarda, por eso cada
+fila registra quién y cuándo.
+
+El sitio se refresca solo cada 25 segundos (y al volver a la pestaña), pero
+nunca pisa el prospecto que tengas abierto mientras lo editás.
+
+Las notas se guardan al dejar de escribir, no en cada tecla: Google permite
+unas 60 escrituras por minuto y así no se agota la cuota.
+
+### Tests
+
+```bash
+npm test
+```
+
+Corre `/api/state` contra una planilla falsa en memoria: verifica que las
+pestañas se creen solas, que editar un prospecto no toque las filas vecinas
+(un error de índice ahí escribiría el estado de uno sobre otro), que el
+import masivo mezcle bien altas y updates, y que sin contraseña no se pueda
+leer ni escribir.
 
 ## Desarrollo local
 
