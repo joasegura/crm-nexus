@@ -152,7 +152,57 @@ const range = normalizeRange(process.env.GOOGLE_SHEET_RANGE || "'Hoja 1'!A2:K");
   }
   console.log('Primera: ' + rows[0].slice(0, 3).join(' | '));
   console.log('Última:  ' + rows[rows.length - 1].slice(0, 3).join(' | '));
-  console.log('\nConexión OK.');
+  console.log('\nLectura OK.');
+
+  /* El estado compartido del equipo necesita ESCRIBIR, y eso no se prueba
+     leyendo: una service account con permiso de Lector pasa todo lo de
+     arriba y recién falla cuando alguien intenta guardar algo. */
+  const sheetsRW = google.sheets({
+    version: 'v4',
+    auth: new google.auth.JWT({
+      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    }),
+  });
+  const TABS = [
+    { title: 'Gestion', cols: ['ID', 'Estado', 'Notas', 'Escrito', 'Volver', 'Plantilla', 'Quien', 'Cuando'] },
+    { title: 'Config', cols: ['Clave', 'Valor', 'Quien', 'Cuando'] },
+  ];
+  const faltan = TABS.filter(t => !hojas.includes(t.title));
+
+  try {
+    if (faltan.length) {
+      await sheetsRW.spreadsheets.batchUpdate({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        requestBody: { requests: faltan.map(t => ({ addSheet: { properties: { title: t.title } } })) },
+      });
+      await sheetsRW.spreadsheets.values.batchUpdate({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        requestBody: {
+          valueInputOption: 'RAW',
+          data: faltan.map(t => ({ range: "'" + t.title + "'!A1", values: [t.cols] })),
+        },
+      });
+      console.log('Escritura OK: cree las pestanas ' + faltan.map(t => t.title).join(' y ') + '.');
+    } else {
+      // Ya existen: reescribimos el encabezado de Config, que es inofensivo.
+      await sheetsRW.spreadsheets.values.update({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: "'Config'!A1:D1",
+        valueInputOption: 'RAW',
+        requestBody: { values: [TABS[1].cols] },
+      });
+      console.log('Escritura OK: las pestanas Gestion y Config ya existen.');
+    }
+    console.log('\nTodo listo: el equipo puede leer y guardar.');
+  } catch (e) {
+    console.error('\nLECTURA OK PERO NO PUEDE ESCRIBIR: ' + e.message);
+    console.error('La service account sigue como Lector. En la planilla:');
+    console.error('Compartir -> ' + process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
+    console.error('-> cambiar de Lector a Editor.');
+    process.exit(1);
+  }
 })().catch(err => {
   console.error('\nFalló: ' + err.message);
   if (/Unable to parse range/i.test(err.message)) {
