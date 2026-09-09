@@ -111,12 +111,13 @@ function normalizeRange(range) {
 const range = normalizeRange(process.env.GOOGLE_SHEET_RANGE || "'Hoja 1'!A2:K");
 
 (async () => {
-  const auth = new google.auth.JWT(
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    null,
-    (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    ['https://www.googleapis.com/auth/spreadsheets.readonly']
-  );
+  // Forma de objeto: la posicional no funciona en google-auth-library 10.x
+  // (ver el comentario en api/leads.js).
+  const auth = new google.auth.JWT({
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  });
   const sheets = google.sheets({ version: 'v4', auth });
 
   // 1) Metadatos: confirma que la service account tiene acceso al archivo.

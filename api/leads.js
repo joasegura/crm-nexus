@@ -37,12 +37,15 @@ function normalizeRange(range) {
 }
 
 async function fetchFromSheet() {
-  const auth = new google.auth.JWT(
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    null,
-    (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    ['https://www.googleapis.com/auth/spreadsheets.readonly']
-  );
+  /* Ojo: la forma posicional new JWT(email, null, key, scopes) dejó de
+     funcionar en google-auth-library 10.x. No tira error: devuelve un cliente
+     sin email ni clave, la petición sale sin autenticar y Google responde
+     "Method doesn't allow unregistered callers". Hay que usar el objeto. */
+  const auth = new google.auth.JWT({
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  });
   const sheets = google.sheets({ version: 'v4', auth });
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
